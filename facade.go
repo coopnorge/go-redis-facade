@@ -6,6 +6,9 @@ import (
 	"time"
 
 	"github.com/go-redis/redis/v8"
+	"github.com/go-redsync/redsync/v4"
+	"github.com/go-redsync/redsync/v4/redis/goredis/v8"
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 )
 
@@ -13,17 +16,19 @@ import (
 type ErrorType int
 
 const (
-	//ErrorTypeInvalid invalid error type
+	// ErrorTypeInvalid invalid error type
 	ErrorTypeInvalid ErrorType = iota
-	//KeyMissing error type
+	// KeyMissing error type
 	KeyMissing
-	//KeyExist error type
+	// KeyExist error type
 	KeyExist
-	//CommandError error type
+	// SyncError will occur with resource locking
+	SyncError
+	// CommandError error type
 	CommandError
-	//OperationError error type
+	// OperationError error type
 	OperationError
-	//BytesConvertionError error type
+	// BytesConvertionError error type
 	BytesConvertionError
 )
 
@@ -54,6 +59,11 @@ type KeyValueStorage interface {
 // RedisFacade storage
 type RedisFacade struct {
 	c redis.Client
+
+	rSync *redsync.Redsync
+
+	mutexKey string
+	mutex    *redsync.Mutex
 }
 
 // Config has all data to connect to redis
@@ -88,7 +98,10 @@ func NewRedisFacade(config Config) (*RedisFacade, error) {
 		return nil, err
 	}
 
-	return &RedisFacade{c: *client}, nil
+	return &RedisFacade{
+		c:     *client,
+		rSync: redsync.New(goredis.NewPool(client)),
+	}, nil
 }
 
 // Save value in storage by key with expiration
@@ -104,14 +117,20 @@ func (rf *RedisFacade) Save(ctx context.Context, key string, value interface{}, 
 		return &StorageFacadeError{Type: KeyExist, Details: fmt.Sprintf("Key (%s) already exists", key)}
 	}
 
-	set := rf.c.Set(ctx, key, value, expiration)
+	set, setErr := rf.doInSync(ctx, key, value, expiration, rf.c.Set)
+	if setErr != nil {
+		return setErr
+	}
 
 	return handleCommandError("Set", set)
 }
 
 // Update value in storage by key and update expiration
 func (rf *RedisFacade) Update(ctx context.Context, key string, value interface{}, expiration time.Duration) (err error) {
-	set := rf.c.Set(ctx, key, value, expiration)
+	set, setErr := rf.doInSync(ctx, key, value, expiration, rf.c.Set)
+	if setErr != nil {
+		return setErr
+	}
 
 	return handleCommandError("Set", set)
 }
@@ -167,6 +186,68 @@ func (rf *RedisFacade) FindKeys(ctx context.Context, pattern string) (redisKeysV
 // Close connection
 func (rf *RedisFacade) Close() error {
 	return rf.c.Close()
+}
+
+// doInSync function execution with resource locking in redis
+func (rf *RedisFacade) doInSync(
+	ctx context.Context,
+	key string,
+	value interface{},
+	expiration time.Duration,
+	cmd func(context.Context, string, interface{}, time.Duration) *redis.StatusCmd,
+) (*redis.StatusCmd, error) {
+	if lockErr := rf.lockAcquire(ctx, key); lockErr != nil {
+		return nil, lockErr
+	}
+
+	result := cmd(ctx, key, value, expiration)
+
+	if lockErr := rf.lockRelease(ctx); lockErr != nil {
+		return result, lockErr
+	}
+
+	return result, nil
+}
+
+// lockAcquire will lock resource
+func (rf *RedisFacade) lockAcquire(ctx context.Context, prefix string) error {
+	newUUID, errNewUUID := uuid.NewUUID()
+	if errNewUUID != nil {
+		return &StorageFacadeError{
+			Type:    SyncError,
+			Details: fmt.Sprintf("unable to generate unique lock uuid, err: %v", errNewUUID),
+		}
+	}
+
+	rf.mutexKey = fmt.Sprintf("%s_", newUUID.String())
+	rf.mutex = rf.rSync.NewMutex(rf.mutexKey)
+	if lockErr := rf.mutex.LockContext(ctx); lockErr != nil {
+		return &StorageFacadeError{
+			Type:    SyncError,
+			Details: fmt.Sprintf("unable to acquire lock for redis resource (key:%s, lock:%s), err: %v", prefix, rf.mutexKey, lockErr),
+		}
+	}
+
+	return nil
+}
+
+// lockRelease will remove lock from resource
+func (rf *RedisFacade) lockRelease(ctx context.Context) error {
+	if rf.mutex == nil {
+		return nil
+	}
+
+	if _, unlockErr := rf.mutex.UnlockContext(ctx); unlockErr != nil {
+		return &StorageFacadeError{
+			Type:    SyncError,
+			Details: fmt.Sprintf("unable to unlock redis resource (lock:%s), err: %s", rf.mutexKey, unlockErr.Error()),
+		}
+	}
+
+	rf.mutexKey = ""
+	rf.mutex = nil
+
+	return nil
 }
 
 func handleCommandError(operation string, set *redis.StatusCmd) error {
