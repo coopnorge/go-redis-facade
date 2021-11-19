@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/go-redis/redis/v8"
@@ -62,8 +63,9 @@ type RedisFacade struct {
 
 	rSync *redsync.Redsync
 
-	mutexKey string
-	mutex    *redsync.Mutex
+	sync.Mutex
+	redMutexKey string
+	redMutex    *redsync.Mutex
 }
 
 // Config has all data to connect to redis
@@ -137,6 +139,10 @@ func (rf *RedisFacade) Update(ctx context.Context, key string, value interface{}
 
 // Find in storage by key
 func (rf *RedisFacade) Find(ctx context.Context, key string) (b []byte, err error) {
+	if lockErr := rf.lockAcquire(ctx, key); lockErr != nil {
+		return nil, lockErr
+	}
+
 	rawResult := rf.c.Get(ctx, key)
 	if rawResult == nil {
 		return nil, &StorageFacadeError{
@@ -159,6 +165,10 @@ func (rf *RedisFacade) Find(ctx context.Context, key string) (b []byte, err erro
 			Type:    BytesConvertionError,
 			Details: err.Error(),
 		}
+	}
+
+	if lockErr := rf.lockRelease(ctx); lockErr != nil {
+		return nil, lockErr
 	}
 
 	return b, nil
@@ -211,6 +221,9 @@ func (rf *RedisFacade) doInSync(
 
 // lockAcquire will lock resource
 func (rf *RedisFacade) lockAcquire(ctx context.Context, prefix string) error {
+	rf.Lock()
+	defer rf.Unlock()
+
 	newUUID, errNewUUID := uuid.NewUUID()
 	if errNewUUID != nil {
 		return &StorageFacadeError{
@@ -219,12 +232,12 @@ func (rf *RedisFacade) lockAcquire(ctx context.Context, prefix string) error {
 		}
 	}
 
-	rf.mutexKey = fmt.Sprintf("%s_", newUUID.String())
-	rf.mutex = rf.rSync.NewMutex(rf.mutexKey)
-	if lockErr := rf.mutex.LockContext(ctx); lockErr != nil {
+	rf.redMutexKey = fmt.Sprintf("%s_", newUUID.String())
+	rf.redMutex = rf.rSync.NewMutex(rf.redMutexKey)
+	if lockErr := rf.redMutex.LockContext(ctx); lockErr != nil {
 		return &StorageFacadeError{
 			Type:    SyncError,
-			Details: fmt.Sprintf("unable to acquire lock for redis resource (key:%s, lock:%s), err: %v", prefix, rf.mutexKey, lockErr),
+			Details: fmt.Sprintf("unable to acquire lock for redis resource (key:%s, lock:%s), err: %v", prefix, rf.redMutexKey, lockErr),
 		}
 	}
 
@@ -233,19 +246,22 @@ func (rf *RedisFacade) lockAcquire(ctx context.Context, prefix string) error {
 
 // lockRelease will remove lock from resource
 func (rf *RedisFacade) lockRelease(ctx context.Context) error {
-	if rf.mutex == nil {
+	rf.Lock()
+	defer rf.Unlock()
+
+	if rf.redMutex == nil {
 		return nil
 	}
 
-	if _, unlockErr := rf.mutex.UnlockContext(ctx); unlockErr != nil {
+	if _, unlockErr := rf.redMutex.UnlockContext(ctx); unlockErr != nil {
 		return &StorageFacadeError{
 			Type:    SyncError,
-			Details: fmt.Sprintf("unable to unlock redis resource (lock:%s), err: %s", rf.mutexKey, unlockErr.Error()),
+			Details: fmt.Sprintf("unable to unlock redis resource (lock:%s), err: %s", rf.redMutexKey, unlockErr.Error()),
 		}
 	}
 
-	rf.mutexKey = ""
-	rf.mutex = nil
+	rf.redMutexKey = ""
+	rf.redMutex = nil
 
 	return nil
 }

@@ -73,33 +73,33 @@ func TestRedisFacadeSaveWithLockInSameTime(t *testing.T) {
 
 	// Create testStoredKey
 	assert.Nil(t, validatorClient.Save(context.Background(), testStoredKey, "init", time.Minute))
+	assert.True(t, isRecordSame(validatorClient, testStoredKey, "init", t), "unexpected stored value")
 
 	// Try update testStoredKey - value
 	go func() {
 		assert.Nil(t, writeClient1.Update(context.Background(), testStoredKey, "first-update", time.Minute))
-
-		assert.True(t, isRecordSame(writeClient1, testStoredKey, "second-update", t), "expected to be found vale")
+		assert.True(t, isRecordSame(validatorClient, testStoredKey, "first-update", t), "unexpected stored value")
 	}()
 	go func() {
 		assert.True(
 			t,
-			isRecordSame(writeClient1, testStoredKey, "init", t) || isRecordSame(writeClient1, testStoredKey, "first-update", t),
-			"record can be already update, expected to find 'init' or 'first-update' value",
+			isRecordSame(writeClient2, testStoredKey, "init", t) || isRecordSame(writeClient2, testStoredKey, "first-update", t),
+			"unexpected stored value",
 		)
 
-		assert.Nil(t, writeClient2.Update(context.Background(), testStoredKey, "second-update", time.Minute))
+		assert.Nil(t, validatorClient.Update(context.Background(), testStoredKey, "second-update", time.Minute))
 	}()
-
-	assert.True(t, isRecordSame(writeClient1, testStoredKey, "init", t), "expected to be found vale")
 
 	time.Sleep(time.Second)
 
-	assert.True(t, isRecordSame(writeClient1, testStoredKey, "second-update", t), "expected to be found vale")
+	assert.True(t, isRecordSame(validatorClient, testStoredKey, "second-update", t), "unexpected stored value")
 }
 
 func isRecordSame(cli *RedisFacade, testStoredKey, expectedRes string, t *testing.T) bool {
 	res, resErr := cli.Find(context.Background(), testStoredKey)
 	assert.Nil(t, resErr)
+
+	t.Log(fmt.Sprintf("Validating stored value in redis by key (%s) => Expected: %s - Stored: %s", testStoredKey, expectedRes, string(res)))
 
 	return expectedRes == string(res)
 }
