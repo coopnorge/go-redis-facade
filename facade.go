@@ -3,9 +3,13 @@ package database
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/go-redis/redis/v8"
+	"github.com/go-redsync/redsync/v4"
+	"github.com/go-redsync/redsync/v4/redis/goredis/v8"
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 )
 
@@ -13,17 +17,19 @@ import (
 type ErrorType int
 
 const (
-	//ErrorTypeInvalid invalid error type
+	// ErrorTypeInvalid invalid error type
 	ErrorTypeInvalid ErrorType = iota
-	//KeyMissing error type
+	// KeyMissing error type
 	KeyMissing
-	//KeyExist error type
+	// KeyExist error type
 	KeyExist
-	//CommandError error type
+	// SyncError will occur with resource locking
+	SyncError
+	// CommandError error type
 	CommandError
-	//OperationError error type
+	// OperationError error type
 	OperationError
-	//BytesConvertionError error type
+	// BytesConvertionError error type
 	BytesConvertionError
 )
 
@@ -54,6 +60,12 @@ type KeyValueStorage interface {
 // RedisFacade storage
 type RedisFacade struct {
 	c redis.Client
+
+	rSync *redsync.Redsync
+
+	sync.Mutex
+	redMutexKey string
+	redMutex    *redsync.Mutex
 }
 
 // Config has all data to connect to redis
@@ -88,7 +100,10 @@ func NewRedisFacade(config Config) (*RedisFacade, error) {
 		return nil, err
 	}
 
-	return &RedisFacade{c: *client}, nil
+	return &RedisFacade{
+		c:     *client,
+		rSync: redsync.New(goredis.NewPool(client)),
+	}, nil
 }
 
 // Save value in storage by key with expiration
@@ -104,20 +119,30 @@ func (rf *RedisFacade) Save(ctx context.Context, key string, value interface{}, 
 		return &StorageFacadeError{Type: KeyExist, Details: fmt.Sprintf("Key (%s) already exists", key)}
 	}
 
-	set := rf.c.Set(ctx, key, value, expiration)
+	set, setErr := rf.doInSync(ctx, key, value, expiration, rf.c.Set)
+	if setErr != nil {
+		return setErr
+	}
 
 	return handleCommandError("Set", set)
 }
 
 // Update value in storage by key and update expiration
 func (rf *RedisFacade) Update(ctx context.Context, key string, value interface{}, expiration time.Duration) (err error) {
-	set := rf.c.Set(ctx, key, value, expiration)
+	set, setErr := rf.doInSync(ctx, key, value, expiration, rf.c.Set)
+	if setErr != nil {
+		return setErr
+	}
 
 	return handleCommandError("Set", set)
 }
 
 // Find in storage by key
 func (rf *RedisFacade) Find(ctx context.Context, key string) (b []byte, err error) {
+	if lockErr := rf.lockAcquire(ctx, key); lockErr != nil {
+		return nil, lockErr
+	}
+
 	rawResult := rf.c.Get(ctx, key)
 	if rawResult == nil {
 		return nil, &StorageFacadeError{
@@ -140,6 +165,10 @@ func (rf *RedisFacade) Find(ctx context.Context, key string) (b []byte, err erro
 			Type:    BytesConvertionError,
 			Details: err.Error(),
 		}
+	}
+
+	if lockErr := rf.lockRelease(ctx); lockErr != nil {
+		return nil, lockErr
 	}
 
 	return b, nil
@@ -167,6 +196,74 @@ func (rf *RedisFacade) FindKeys(ctx context.Context, pattern string) (redisKeysV
 // Close connection
 func (rf *RedisFacade) Close() error {
 	return rf.c.Close()
+}
+
+// doInSync function execution with resource locking in redis
+func (rf *RedisFacade) doInSync(
+	ctx context.Context,
+	key string,
+	value interface{},
+	expiration time.Duration,
+	cmd func(context.Context, string, interface{}, time.Duration) *redis.StatusCmd,
+) (*redis.StatusCmd, error) {
+	if lockErr := rf.lockAcquire(ctx, key); lockErr != nil {
+		return nil, lockErr
+	}
+
+	result := cmd(ctx, key, value, expiration)
+
+	if lockErr := rf.lockRelease(ctx); lockErr != nil {
+		return result, lockErr
+	}
+
+	return result, nil
+}
+
+// lockAcquire will lock resource
+func (rf *RedisFacade) lockAcquire(ctx context.Context, prefix string) error {
+	rf.Lock()
+	defer rf.Unlock()
+
+	newUUID, errNewUUID := uuid.NewUUID()
+	if errNewUUID != nil {
+		return &StorageFacadeError{
+			Type:    SyncError,
+			Details: fmt.Sprintf("unable to generate unique lock uuid, err: %v", errNewUUID),
+		}
+	}
+
+	rf.redMutexKey = fmt.Sprintf("%s_", newUUID.String())
+	rf.redMutex = rf.rSync.NewMutex(rf.redMutexKey)
+	if lockErr := rf.redMutex.LockContext(ctx); lockErr != nil {
+		return &StorageFacadeError{
+			Type:    SyncError,
+			Details: fmt.Sprintf("unable to acquire lock for redis resource (key:%s, lock:%s), err: %v", prefix, rf.redMutexKey, lockErr),
+		}
+	}
+
+	return nil
+}
+
+// lockRelease will remove lock from resource
+func (rf *RedisFacade) lockRelease(ctx context.Context) error {
+	rf.Lock()
+	defer rf.Unlock()
+
+	if rf.redMutex == nil {
+		return nil
+	}
+
+	if _, unlockErr := rf.redMutex.UnlockContext(ctx); unlockErr != nil {
+		return &StorageFacadeError{
+			Type:    SyncError,
+			Details: fmt.Sprintf("unable to unlock redis resource (lock:%s), err: %s", rf.redMutexKey, unlockErr.Error()),
+		}
+	}
+
+	rf.redMutexKey = ""
+	rf.redMutex = nil
+
+	return nil
 }
 
 func handleCommandError(operation string, set *redis.StatusCmd) error {
