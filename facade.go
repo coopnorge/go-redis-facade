@@ -49,6 +49,8 @@ type KeyValueStorage interface {
 	Save(ctx context.Context, key string, value interface{}, expiration time.Duration) error
 	// Update value in storage by key and update expiration
 	Update(ctx context.Context, key string, value interface{}, expiration time.Duration) error
+	// Delete value in storage by key
+	Delete(ctx context.Context, key string) (count int64, err error)
 	// Find in storage by key
 	Find(ctx context.Context, key string) ([]byte, error)
 	// FindKeys in storage by given pattern
@@ -135,6 +137,27 @@ func (rf *RedisFacade) Update(ctx context.Context, key string, value interface{}
 	}
 
 	return handleCommandError("Set", set)
+}
+
+// Delete value in storage by key
+func (rf *RedisFacade) Delete(ctx context.Context, key string) (count int64, err error) {
+	if lockErr := rf.lockAcquire(ctx, key); lockErr != nil {
+		return count, lockErr
+	}
+
+	rawResult := rf.c.Del(ctx, key)
+	if rawResult == nil {
+		return 0, &StorageFacadeError{
+			Type:    CommandError,
+			Details: fmt.Sprintf("unexpected redis error, operation (%s) command response is nil", "Del"),
+		}
+	}
+	redisVal, errRedisVal := rawResult.Result()
+	err = rf.handleValueError(errRedisVal, "Del", key)
+	if lockErr := rf.lockRelease(ctx); lockErr != nil {
+		return count, lockErr
+	}
+	return redisVal, err
 }
 
 // Find in storage by key
