@@ -141,6 +141,10 @@ func (rf *RedisFacade) Update(ctx context.Context, key string, value interface{}
 
 // Delete value in storage by key
 func (rf *RedisFacade) Delete(ctx context.Context, key string) (count int64, err error) {
+	if lockErr := rf.lockAcquire(ctx, key); lockErr != nil {
+		return count, lockErr
+	}
+
 	rawResult := rf.c.Del(ctx, key)
 	if rawResult == nil {
 		return 0, &StorageFacadeError{
@@ -150,6 +154,9 @@ func (rf *RedisFacade) Delete(ctx context.Context, key string) (count int64, err
 	}
 	redisVal, errRedisVal := rawResult.Result()
 	err = rf.handleValueError(errRedisVal, "Del", key)
+	if lockErr := rf.lockRelease(ctx); lockErr != nil {
+		return count, lockErr
+	}
 	return redisVal, err
 }
 
