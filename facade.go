@@ -55,6 +55,8 @@ type KeyValueStorage interface {
 	Find(ctx context.Context, key string) ([]byte, error)
 	// FindKeys in storage by given pattern
 	FindKeys(ctx context.Context, pattern string) ([]string, error)
+	// IsAvailable will return error if there is trouble to access storage
+	IsAvailable(ctx context.Context) error
 	// Close connection
 	Close() error
 }
@@ -85,7 +87,7 @@ type Config struct {
 
 // NewRedisFacade makes new connection to key value storage
 func NewRedisFacade(config Config) (*RedisFacade, error) {
-	client := redis.NewClient(&redis.Options{
+	rCli := redis.NewClient(&redis.Options{
 		Addr:         config.Address,
 		Password:     config.Password,
 		DB:           config.Database,
@@ -97,15 +99,23 @@ func NewRedisFacade(config Config) (*RedisFacade, error) {
 		PoolTimeout:  config.PoolTimeout,
 	})
 
-	res := client.Ping(context.Background())
-	if err := handleCommandError("Ping", res); err != nil {
+	rf := &RedisFacade{c: *rCli, rSync: redsync.New(goredis.NewPool(rCli))}
+	if err := rf.IsAvailable(context.Background()); err != nil {
 		return nil, err
 	}
 
-	return &RedisFacade{
-		c:     *client,
-		rSync: redsync.New(goredis.NewPool(client)),
-	}, nil
+	return rf, nil
+}
+
+// IsAvailable will return error if there is trouble to access storage
+func (rf *RedisFacade) IsAvailable(ctx context.Context) error {
+	res := rf.c.Ping(ctx)
+
+	if err := handleCommandError("Ping", res); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // Save value in storage by key with expiration
