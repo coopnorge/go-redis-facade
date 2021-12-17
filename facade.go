@@ -46,13 +46,13 @@ func (e *StorageFacadeError) Error() string {
 // KeyValueStorage defines interface
 type KeyValueStorage interface {
 	// Save value in storage by key with expiration
-	Save(ctx context.Context, key string, value interface{}, expiration time.Duration) error
+	Save(ctx context.Context, key string, value string, expiration time.Duration) error
 	// Update value in storage by key and update expiration
-	Update(ctx context.Context, key string, value interface{}, expiration time.Duration) error
+	Update(ctx context.Context, key string, value string, expiration time.Duration) error
 	// Delete value in storage by key
 	Delete(ctx context.Context, key string) (count int64, err error)
 	// Find in storage by key
-	Find(ctx context.Context, key string) ([]byte, error)
+	Find(ctx context.Context, key string) (string, error)
 	// FindKeys in storage by given pattern
 	FindKeys(ctx context.Context, pattern string) ([]string, error)
 	// IsAvailable will return error if there is trouble to access storage
