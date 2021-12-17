@@ -29,8 +29,8 @@ const (
 	CommandError
 	// OperationError error type
 	OperationError
-	// BytesConvertionError error type
-	BytesConvertionError
+	// BytesConversionError error type
+	BytesConversionError
 )
 
 // StorageFacadeError is a custom error type used for error handling
@@ -121,8 +121,8 @@ func (rf *RedisFacade) IsAvailable(ctx context.Context) error {
 }
 
 // Save value in storage by key with expiration
-func (rf *RedisFacade) Save(ctx context.Context, key string, value []byte, expiration time.Duration) (err error) {
-	encryptedVal, err := rf.encryption.Encrypt(value)
+func (rf *RedisFacade) Save(ctx context.Context, key string, value string, expiration time.Duration) (err error) {
+	encryptedVal, err := rf.encryption.Encrypt([]byte(value))
 	if err != nil {
 		return &StorageFacadeError{Type: OperationError, Details: err.Error()}
 	}
@@ -146,8 +146,8 @@ func (rf *RedisFacade) Save(ctx context.Context, key string, value []byte, expir
 }
 
 // Update value in storage by key and update expiration
-func (rf *RedisFacade) Update(ctx context.Context, key string, value []byte, expiration time.Duration) (err error) {
-	encryptedVal, err := rf.encryption.Encrypt(value)
+func (rf *RedisFacade) Update(ctx context.Context, key string, value string, expiration time.Duration) (err error) {
+	encryptedVal, err := rf.encryption.Encrypt([]byte(value))
 	if err != nil {
 		return &StorageFacadeError{Type: OperationError, Details: err.Error()}
 	}
@@ -181,14 +181,14 @@ func (rf *RedisFacade) Delete(ctx context.Context, key string) (count int64, err
 }
 
 // Find in storage by key
-func (rf *RedisFacade) Find(ctx context.Context, key string) (b []byte, err error) {
+func (rf *RedisFacade) Find(ctx context.Context, key string) (v string, err error) {
 	if lockErr := rf.lockAcquire(ctx, key); lockErr != nil {
-		return nil, lockErr
+		return "", lockErr
 	}
 
 	rawResult := rf.c.Get(ctx, key)
 	if rawResult == nil {
-		return nil, &StorageFacadeError{
+		return "", &StorageFacadeError{
 			Type:    CommandError,
 			Details: fmt.Sprintf("unexpected redis error, operation (%s) command response is nil", "Get"),
 		}
@@ -197,28 +197,29 @@ func (rf *RedisFacade) Find(ctx context.Context, key string) (b []byte, err erro
 	redisVal, errRedisVal := rawResult.Result()
 	err = rf.handleValueError(errRedisVal, "Get", key)
 	if err != nil {
-		return []byte{}, err
+		return "", err
 	}
 	if redisVal == "" {
-		return []byte{}, nil
+		return "", nil
 	}
 
-	if b, err = rawResult.Bytes(); err != nil {
-		return nil, &StorageFacadeError{
-			Type:    BytesConvertionError,
+	b, err := rawResult.Bytes()
+	if err != nil {
+		return "", &StorageFacadeError{
+			Type:    BytesConversionError,
 			Details: err.Error(),
 		}
 	}
 	decryptedVal, err := rf.encryption.Decrypt(b)
 	if err != nil {
-		return nil, &StorageFacadeError{Type: OperationError, Details: err.Error()}
+		return "", &StorageFacadeError{Type: OperationError, Details: err.Error()}
 	}
 
 	if lockErr := rf.lockRelease(ctx); lockErr != nil {
-		return nil, lockErr
+		return "", lockErr
 	}
 
-	return decryptedVal, nil
+	return string(decryptedVal), nil
 }
 
 // FindKeys in storage by given pattern

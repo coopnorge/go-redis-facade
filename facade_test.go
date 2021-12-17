@@ -61,20 +61,20 @@ func TestRedisFacadeSaveWithLock(t *testing.T) {
 
 	// Create testStoredKey
 	mockEncryptor0.EXPECT().Encrypt([]byte("bar")).Return([]byte("encrypted-bar"), nil)
-	assert.Nil(t, facadeClient0.Save(context.Background(), testStoredKey, []byte("bar"), time.Minute))
+	assert.Nil(t, facadeClient0.Save(context.Background(), testStoredKey, "bar", time.Minute))
 	time.Sleep(time.Millisecond)
 
 	// Try update testStoredKey - value
 	go func() {
 		mockEncryptor1.EXPECT().Encrypt([]byte("first-update")).Return([]byte("encrypted-first-update"), nil)
-		assert.Nil(t, facadeClient1.Update(context.Background(), testStoredKey, []byte("first-update"), time.Minute))
+		assert.Nil(t, facadeClient1.Update(context.Background(), testStoredKey, "first-update", time.Minute))
 		time.Sleep(time.Millisecond)
 		mockEncryptor1.EXPECT().Encrypt([]byte(expectedStoredValue)).Return([]byte("encrypted-the-one-bar"), nil)
-		assert.Nil(t, facadeClient1.Update(context.Background(), testStoredKey, []byte(expectedStoredValue), time.Minute))
+		assert.Nil(t, facadeClient1.Update(context.Background(), testStoredKey, expectedStoredValue, time.Minute))
 	}()
 	go func() {
 		mockEncryptor2.EXPECT().Encrypt([]byte("second-update")).Return([]byte("encrypted-second-update"), nil)
-		assert.Nil(t, facadeClient2.Update(context.Background(), testStoredKey, []byte("second-update"), time.Minute))
+		assert.Nil(t, facadeClient2.Update(context.Background(), testStoredKey, "second-update", time.Minute))
 	}()
 
 	time.Sleep(time.Millisecond * 500)
@@ -100,12 +100,12 @@ func TestRedisFacadeSaveWithLockInSameTime(t *testing.T) {
 	const testStoredKey = "race-write"
 
 	// Create testStoredKey
-	assert.Nil(t, validatorClient.Save(context.Background(), testStoredKey, []byte("init"), time.Minute))
+	assert.Nil(t, validatorClient.Save(context.Background(), testStoredKey, "init", time.Minute))
 	assert.True(t, isRecordSame(validatorClient, testStoredKey, "init", t), "unexpected stored value")
 
 	// Try update testStoredKey - value
 	go func() {
-		assert.Nil(t, writeClient1.Update(context.Background(), testStoredKey, []byte("first-update"), time.Minute))
+		assert.Nil(t, writeClient1.Update(context.Background(), testStoredKey, "first-update", time.Minute))
 		assert.True(t, isRecordSame(validatorClient, testStoredKey, "first-update", t), "unexpected stored value")
 	}()
 	go func() {
@@ -114,7 +114,7 @@ func TestRedisFacadeSaveWithLockInSameTime(t *testing.T) {
 			isRecordSame(writeClient2, testStoredKey, "init", t) || isRecordSame(writeClient2, testStoredKey, "first-update", t),
 			"unexpected stored value",
 		)
-		assert.Nil(t, validatorClient.Update(context.Background(), testStoredKey, []byte("second-update"), time.Minute))
+		assert.Nil(t, validatorClient.Update(context.Background(), testStoredKey, "second-update", time.Minute))
 	}()
 
 	time.Sleep(time.Second)
