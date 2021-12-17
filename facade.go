@@ -29,8 +29,8 @@ const (
 	CommandError
 	// OperationError error type
 	OperationError
-	// BytesConvertionError error type
-	BytesConvertionError
+	// BytesConversionError error type
+	BytesConversionError
 )
 
 // StorageFacadeError is a custom error type used for error handling
@@ -70,23 +70,25 @@ type RedisFacade struct {
 	sync.Mutex
 	redMutexKey string
 	redMutex    *redsync.Mutex
+
+	encryption Encryption
 }
 
 // Config has all data to connect to redis
 type Config struct {
-	Address      string
-	Password     string
-	Database     int
-	DialTimeout  time.Duration
-	WriteTimeout time.Duration
-	ReadTimeout  time.Duration
-	MaxRetries   int
-	PoolSize     int
-	PoolTimeout  time.Duration
+	Address        string
+	Password       string
+	Database       int
+	DialTimeout    time.Duration
+	WriteTimeout   time.Duration
+	ReadTimeout    time.Duration
+	MaxRetries     int
+	PoolSize       int
+	PoolTimeout    time.Duration
 }
 
 // NewRedisFacade makes new connection to key value storage
-func NewRedisFacade(config Config) (*RedisFacade, error) {
+func NewRedisFacade(config Config, encryption Encryption) (*RedisFacade, error) {
 	rCli := redis.NewClient(&redis.Options{
 		Addr:         config.Address,
 		Password:     config.Password,
@@ -99,7 +101,7 @@ func NewRedisFacade(config Config) (*RedisFacade, error) {
 		PoolTimeout:  config.PoolTimeout,
 	})
 
-	rf := &RedisFacade{c: *rCli, rSync: redsync.New(goredis.NewPool(rCli))}
+	rf := &RedisFacade{c: *rCli, rSync: redsync.New(goredis.NewPool(rCli)), encryption: encryption}
 	if err := rf.IsAvailable(context.Background()); err != nil {
 		return nil, err
 	}
@@ -119,7 +121,11 @@ func (rf *RedisFacade) IsAvailable(ctx context.Context) error {
 }
 
 // Save value in storage by key with expiration
-func (rf *RedisFacade) Save(ctx context.Context, key string, value interface{}, expiration time.Duration) (err error) {
+func (rf *RedisFacade) Save(ctx context.Context, key string, value string, expiration time.Duration) (err error) {
+	encryptedVal, err := rf.encryption.Encrypt([]byte(value))
+	if err != nil {
+		return &StorageFacadeError{Type: OperationError, Details: err.Error()}
+	}
 	result := rf.c.Keys(ctx, key)
 	keys, err := result.Result()
 	err = rf.handleValueError(err, "Keys", key)
@@ -131,7 +137,7 @@ func (rf *RedisFacade) Save(ctx context.Context, key string, value interface{}, 
 		return &StorageFacadeError{Type: KeyExist, Details: fmt.Sprintf("Key (%s) already exists", key)}
 	}
 
-	set, setErr := rf.doInSync(ctx, key, value, expiration, rf.c.Set)
+	set, setErr := rf.doInSync(ctx, key, encryptedVal, expiration, rf.c.Set)
 	if setErr != nil {
 		return setErr
 	}
@@ -140,8 +146,12 @@ func (rf *RedisFacade) Save(ctx context.Context, key string, value interface{}, 
 }
 
 // Update value in storage by key and update expiration
-func (rf *RedisFacade) Update(ctx context.Context, key string, value interface{}, expiration time.Duration) (err error) {
-	set, setErr := rf.doInSync(ctx, key, value, expiration, rf.c.Set)
+func (rf *RedisFacade) Update(ctx context.Context, key string, value string, expiration time.Duration) (err error) {
+	encryptedVal, err := rf.encryption.Encrypt([]byte(value))
+	if err != nil {
+		return &StorageFacadeError{Type: OperationError, Details: err.Error()}
+	}
+	set, setErr := rf.doInSync(ctx, key, encryptedVal, expiration, rf.c.Set)
 	if setErr != nil {
 		return setErr
 	}
@@ -171,14 +181,14 @@ func (rf *RedisFacade) Delete(ctx context.Context, key string) (count int64, err
 }
 
 // Find in storage by key
-func (rf *RedisFacade) Find(ctx context.Context, key string) (b []byte, err error) {
+func (rf *RedisFacade) Find(ctx context.Context, key string) (v string, err error) {
 	if lockErr := rf.lockAcquire(ctx, key); lockErr != nil {
-		return nil, lockErr
+		return "", lockErr
 	}
 
 	rawResult := rf.c.Get(ctx, key)
 	if rawResult == nil {
-		return nil, &StorageFacadeError{
+		return "", &StorageFacadeError{
 			Type:    CommandError,
 			Details: fmt.Sprintf("unexpected redis error, operation (%s) command response is nil", "Get"),
 		}
@@ -187,24 +197,29 @@ func (rf *RedisFacade) Find(ctx context.Context, key string) (b []byte, err erro
 	redisVal, errRedisVal := rawResult.Result()
 	err = rf.handleValueError(errRedisVal, "Get", key)
 	if err != nil {
-		return []byte{}, err
+		return "", err
 	}
 	if redisVal == "" {
-		return []byte{}, nil
+		return "", nil
 	}
 
-	if b, err = rawResult.Bytes(); err != nil {
-		return nil, &StorageFacadeError{
-			Type:    BytesConvertionError,
+	b, err := rawResult.Bytes()
+	if err != nil {
+		return "", &StorageFacadeError{
+			Type:    BytesConversionError,
 			Details: err.Error(),
 		}
 	}
-
-	if lockErr := rf.lockRelease(ctx); lockErr != nil {
-		return nil, lockErr
+	decryptedVal, err := rf.encryption.Decrypt(b)
+	if err != nil {
+		return "", &StorageFacadeError{Type: OperationError, Details: err.Error()}
 	}
 
-	return b, nil
+	if lockErr := rf.lockRelease(ctx); lockErr != nil {
+		return "", lockErr
+	}
+
+	return string(decryptedVal), nil
 }
 
 // FindKeys in storage by given pattern

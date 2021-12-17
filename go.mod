@@ -7,8 +7,10 @@ require (
 	github.com/alicebob/miniredis v2.5.0+incompatible
 	github.com/go-redis/redis/v8 v8.11.4
 	github.com/go-redsync/redsync/v4 v4.4.2
+	github.com/golang/mock v1.4.4
+	github.com/google/tink/go v1.6.1
 	github.com/google/uuid v1.3.0
 	github.com/pkg/errors v0.9.1
-	github.com/stretchr/testify v1.5.1
+	github.com/stretchr/testify v1.6.1
 	github.com/yuin/gopher-lua v0.0.0-20210529063254-f4c35e4016d9 // indirect
 )
