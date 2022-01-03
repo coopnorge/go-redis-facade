@@ -22,14 +22,13 @@ type EncryptionClient struct {
 
 // EncryptionConfig is configuration needed to set up the encryption client
 type EncryptionConfig struct {
-	CredentialPath string
 	RedisKeyURI    string
 	Aad            []byte
 }
 
 // NewEncryptionClient creates a new client for encrypting and decrypting data
 func NewEncryptionClient(c EncryptionConfig) (*EncryptionClient, error) {
-	kmsClient, err := gcpkms.NewClientWithCredentials(c.RedisKeyURI, c.CredentialPath)
+	kmsClient, err := gcpkms.NewClient(c.RedisKeyURI)
 	if err != nil {
 		return nil, err
 	}
