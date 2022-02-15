@@ -46,7 +46,7 @@ func TestRedisFacadeSaveWithLock(t *testing.T) {
 	mockEncryptor0 := mock.NewMockEncryption(ctrl)
 	mockEncryptor1 := mock.NewMockEncryption(ctrl)
 	mockEncryptor2 := mock.NewMockEncryption(ctrl)
-	cfg := Config{Address: stubConn.Addr()}
+	cfg := Config{Address: stubConn.Addr(), EncryptionEnabled: true}
 
 	facadeClient0, facadeClient0Err := NewRedisFacade(cfg, mockEncryptor0)
 	facadeClient1, facadeClient1Err := NewRedisFacade(cfg, mockEncryptor1)
@@ -87,7 +87,7 @@ func TestRedisFacadeSaveWithLockInSameTime(t *testing.T) {
 	mockEncryptor0 := &mockEncryption{}
 	mockEncryptor1 := &mockEncryption{}
 	mockEncryptor2 := &mockEncryption{}
-	cfg := Config{Address: stubConn.Addr()}
+	cfg := Config{Address: stubConn.Addr(), EncryptionEnabled: true}
 
 	validatorClient, validatorClientErr := NewRedisFacade(cfg, mockEncryptor0)
 	writeClient1, writeClient1Err := NewRedisFacade(cfg, mockEncryptor1)
@@ -128,4 +128,20 @@ func isRecordSame(cli *RedisFacade, testStoredKey, expectedRes string, t *testin
 	t.Log(fmt.Sprintf("Validating stored value in redis by key (%s) => Expected: %s - Stored: %s", testStoredKey, expectedRes, string(res)))
 
 	return expectedRes == string(res)
+}
+
+func TestEncryptionDisabled(t *testing.T)  {
+	ctrl := gomock.NewController(t)
+	mockEncryptor := mock.NewMockEncryption(ctrl)
+	cfg := Config{Address: stubConn.Addr(), EncryptionEnabled: false}
+
+	validatorClient, validatorClientErr := NewRedisFacade(cfg, mockEncryptor)
+	assert.Nil(t, validatorClientErr)
+
+	err := validatorClient.Save(context.TODO(), "something", "val", time.Minute)
+	assert.Nil(t, err)
+
+	val, err := validatorClient.Find(context.TODO(), "something")
+	assert.Nil(t, err)
+	assert.Equal(t, "val", val)
 }

@@ -72,19 +72,21 @@ type RedisFacade struct {
 	redMutex    *redsync.Mutex
 
 	encryption Encryption
+	encryptionEnabled bool
 }
 
 // Config has all data to connect to redis
 type Config struct {
-	Address        string
-	Password       string
-	Database       int
-	DialTimeout    time.Duration
-	WriteTimeout   time.Duration
-	ReadTimeout    time.Duration
-	MaxRetries     int
-	PoolSize       int
-	PoolTimeout    time.Duration
+	Address           string
+	Password          string
+	Database          int
+	DialTimeout       time.Duration
+	WriteTimeout      time.Duration
+	ReadTimeout       time.Duration
+	MaxRetries        int
+	PoolSize          int
+	PoolTimeout       time.Duration
+	EncryptionEnabled bool
 }
 
 // NewRedisFacade makes new connection to key value storage
@@ -101,7 +103,12 @@ func NewRedisFacade(config Config, encryption Encryption) (*RedisFacade, error) 
 		PoolTimeout:  config.PoolTimeout,
 	})
 
-	rf := &RedisFacade{c: *rCli, rSync: redsync.New(goredis.NewPool(rCli)), encryption: encryption}
+	rf := &RedisFacade{
+		c: *rCli,
+		rSync: redsync.New(goredis.NewPool(rCli)),
+		encryption: encryption,
+		encryptionEnabled: config.EncryptionEnabled,
+	}
 	if err := rf.IsAvailable(context.Background()); err != nil {
 		return nil, err
 	}
@@ -122,9 +129,12 @@ func (rf *RedisFacade) IsAvailable(ctx context.Context) error {
 
 // Save value in storage by key with expiration
 func (rf *RedisFacade) Save(ctx context.Context, key string, value string, expiration time.Duration) (err error) {
-	encryptedVal, err := rf.encryption.Encrypt([]byte(value))
-	if err != nil {
-		return &StorageFacadeError{Type: OperationError, Details: err.Error()}
+	valueToStore := []byte(value)
+	if rf.encryptionEnabled {
+		valueToStore, err = rf.encryption.Encrypt([]byte(value))
+		if err != nil {
+			return &StorageFacadeError{Type: OperationError, Details: err.Error()}
+		}
 	}
 	result := rf.c.Keys(ctx, key)
 	keys, err := result.Result()
@@ -137,7 +147,7 @@ func (rf *RedisFacade) Save(ctx context.Context, key string, value string, expir
 		return &StorageFacadeError{Type: KeyExist, Details: fmt.Sprintf("Key (%s) already exists", key)}
 	}
 
-	set, setErr := rf.doInSync(ctx, key, encryptedVal, expiration, rf.c.Set)
+	set, setErr := rf.doInSync(ctx, key, valueToStore, expiration, rf.c.Set)
 	if setErr != nil {
 		return setErr
 	}
@@ -147,11 +157,15 @@ func (rf *RedisFacade) Save(ctx context.Context, key string, value string, expir
 
 // Update value in storage by key and update expiration
 func (rf *RedisFacade) Update(ctx context.Context, key string, value string, expiration time.Duration) (err error) {
-	encryptedVal, err := rf.encryption.Encrypt([]byte(value))
-	if err != nil {
-		return &StorageFacadeError{Type: OperationError, Details: err.Error()}
+	valueToStore := []byte(value)
+	if rf.encryptionEnabled {
+		valueToStore, err = rf.encryption.Encrypt([]byte(value))
+		if err != nil {
+			return &StorageFacadeError{Type: OperationError, Details: err.Error()}
+		}
 	}
-	set, setErr := rf.doInSync(ctx, key, encryptedVal, expiration, rf.c.Set)
+
+	set, setErr := rf.doInSync(ctx, key, valueToStore, expiration, rf.c.Set)
 	if setErr != nil {
 		return setErr
 	}
@@ -210,16 +224,19 @@ func (rf *RedisFacade) Find(ctx context.Context, key string) (v string, err erro
 			Details: err.Error(),
 		}
 	}
-	decryptedVal, err := rf.encryption.Decrypt(b)
-	if err != nil {
-		return "", &StorageFacadeError{Type: OperationError, Details: err.Error()}
+
+	if rf.encryptionEnabled {
+		b, err = rf.encryption.Decrypt(b)
+		if err != nil {
+			return "", &StorageFacadeError{Type: OperationError, Details: err.Error()}
+		}
 	}
 
 	if lockErr := rf.lockRelease(ctx); lockErr != nil {
 		return "", lockErr
 	}
 
-	return string(decryptedVal), nil
+	return string(b), nil
 }
 
 // FindKeys in storage by given pattern
