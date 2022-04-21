@@ -1,0 +1,13 @@
+{
+	"mocks": {
+		"Encryption": {
+			"checksum": "Yv0RMmsx0aN940uMvO1+Gw==",
+			"source_checksum": "BGbbqu//igYEDYvGQsDP7w==",
+			"mode": "SOURCE_MODE",
+			"source_mode_runner": {
+				"source": "encryption.go",
+				"destination": "internal/generated/mocks/encryption.go"
+			}
+		}
+	}
+}

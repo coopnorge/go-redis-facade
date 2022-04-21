@@ -1,5 +1,6 @@
 toolchain/
 outputs/
+
 # Golang
 #
 
@@ -42,14 +43,6 @@ outputs/
 # Session
 Session.vim
 Sessionx.vim
-
-# Temporary
-.netrwhist
-*~
-# Auto-generated tag files
-tags
-# Persistent undo
-[._]*.un~
 
 # Covers JetBrains IDEs
 # Reference: https://intellij-support.jetbrains.com/hc/en-us/articles/206544839

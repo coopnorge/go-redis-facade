@@ -3,30 +3,37 @@ package database
 import (
 	"context"
 	"fmt"
-	"github.com/golang/mock/gomock"
 	"os"
 	"strings"
 	"testing"
 	"time"
 
-	mock "dev.azure.com/coopnorge/Scan-and-pay/db-facade.git/generated/mocks"
 	"github.com/alicebob/miniredis"
+	"github.com/coopnorge/scan-and-pay-redis-facade/internal/generated/mocks"
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 )
 
 var stubConn *miniredis.Miniredis
 
-type mockEncryption struct {
-}
+type stubEncryption struct{}
 
-func (m *mockEncryption) Encrypt(value []byte) ([]byte, error) {
+func (m *stubEncryption) Encrypt(value []byte) ([]byte, error) {
 	return []byte(fmt.Sprintf("encrypted-%s", string(value))), nil
 }
 
-func (m *mockEncryption) Decrypt(ciphertext []byte) ([]byte, error) {
+func (m *stubEncryption) Decrypt(ciphertext []byte) ([]byte, error) {
 	asString := string(ciphertext)
 	withoutPrefix := strings.TrimPrefix(asString, "encrypted-")
 	return []byte(withoutPrefix), nil
+}
+
+func getPreparedMocks(t *testing.T) *mock_database.MockEncryption {
+	ctrl := gomock.NewController(t)
+	mockEncryptor := mock_database.NewMockEncryption(ctrl)
+	ctrl.Finish()
+
+	return mockEncryptor
 }
 
 func TestMain(m *testing.M) {
@@ -42,10 +49,10 @@ func TestMain(m *testing.M) {
 }
 
 func TestRedisFacadeSaveWithLock(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	mockEncryptor0 := mock.NewMockEncryption(ctrl)
-	mockEncryptor1 := mock.NewMockEncryption(ctrl)
-	mockEncryptor2 := mock.NewMockEncryption(ctrl)
+	mockEncryptor0 := getPreparedMocks(t)
+	mockEncryptor1 := getPreparedMocks(t)
+	mockEncryptor2 := getPreparedMocks(t)
+
 	cfg := Config{Address: stubConn.Addr(), EncryptionEnabled: true}
 
 	facadeClient0, facadeClient0Err := NewRedisFacade(cfg, mockEncryptor0)
@@ -84,9 +91,9 @@ func TestRedisFacadeSaveWithLock(t *testing.T) {
 }
 
 func TestRedisFacadeSaveWithLockInSameTime(t *testing.T) {
-	mockEncryptor0 := &mockEncryption{}
-	mockEncryptor1 := &mockEncryption{}
-	mockEncryptor2 := &mockEncryption{}
+	mockEncryptor0 := &stubEncryption{}
+	mockEncryptor1 := &stubEncryption{}
+	mockEncryptor2 := &stubEncryption{}
 	cfg := Config{Address: stubConn.Addr(), EncryptionEnabled: true}
 
 	validatorClient, validatorClientErr := NewRedisFacade(cfg, mockEncryptor0)
@@ -130,9 +137,9 @@ func isRecordSame(cli *RedisFacade, testStoredKey, expectedRes string, t *testin
 	return expectedRes == string(res)
 }
 
-func TestEncryptionDisabled(t *testing.T)  {
-	ctrl := gomock.NewController(t)
-	mockEncryptor := mock.NewMockEncryption(ctrl)
+func TestEncryptionDisabled(t *testing.T) {
+	mockEncryptor := getPreparedMocks(t)
+
 	cfg := Config{Address: stubConn.Addr(), EncryptionEnabled: false}
 
 	validatorClient, validatorClientErr := NewRedisFacade(cfg, mockEncryptor)

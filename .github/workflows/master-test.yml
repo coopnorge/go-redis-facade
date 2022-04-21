@@ -1,0 +1,22 @@
+---
+name: Master Test
+on:
+  push:
+    branches:
+      - master
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.*
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Fetch all tags
+        run: git fetch --depth=1 origin +refs/tags/*:refs/tags/*
+      - name: Last tag
+        run: git describe --tags $(git rev-list --tags --max-count=1) --always
+      - name: Test
+        run: go test -v -race -covermode=atomic -p=1 ./...

@@ -5,7 +5,6 @@
 package mock_database
 
 import (
-	"fmt"
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
@@ -45,8 +44,6 @@ func (m *MockEncryption) Decrypt(ciphertext []byte) ([]byte, error) {
 
 // Decrypt indicates an expected call of Decrypt.
 func (mr *MockEncryptionMockRecorder) Decrypt(ciphertext interface{}) *gomock.Call {
-	val := ciphertext.([]byte)
-	fmt.Printf("Dencrypt received %s\n", string(val))
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Decrypt", reflect.TypeOf((*MockEncryption)(nil).Decrypt), ciphertext)
 }
@@ -62,8 +59,6 @@ func (m *MockEncryption) Encrypt(value []byte) ([]byte, error) {
 
 // Encrypt indicates an expected call of Encrypt.
 func (mr *MockEncryptionMockRecorder) Encrypt(value interface{}) *gomock.Call {
-	val := value.([]byte)
-	fmt.Printf("Encrypt received %s\n", string(val))
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Encrypt", reflect.TypeOf((*MockEncryption)(nil).Encrypt), value)
 }

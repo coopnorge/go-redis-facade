@@ -21,7 +21,8 @@ type Mutex struct {
 	tries     int
 	delayFunc DelayFunc
 
-	factor float64
+	driftFactor   float64
+	timeoutFactor float64
 
 	quorum int
 
@@ -54,6 +55,10 @@ func (m *Mutex) Lock() error {
 
 // LockContext locks m. In case it returns an error on failure, you may retry to acquire the lock by calling this method again.
 func (m *Mutex) LockContext(ctx context.Context) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
 	value, err := m.genValueFunc()
 	if err != nil {
 		return err
@@ -61,28 +66,45 @@ func (m *Mutex) LockContext(ctx context.Context) error {
 
 	for i := 0; i < m.tries; i++ {
 		if i != 0 {
-			time.Sleep(m.delayFunc(i))
+			select {
+			case <-ctx.Done():
+				// Exit early if the context is done.
+				return ErrFailed
+			case <-time.After(m.delayFunc(i)):
+				// Fall-through when the delay timer completes.
+			}
 		}
 
 		start := time.Now()
 
-		n, err := m.actOnPoolsAsync(func(pool redis.Pool) (bool, error) {
-			return m.acquire(ctx, pool, value)
-		})
+		n, err := func() (int, error) {
+			ctx, cancel := context.WithTimeout(ctx, time.Duration(int64(float64(m.expiry)*m.timeoutFactor)))
+			defer cancel()
+			return m.actOnPoolsAsync(func(pool redis.Pool) (bool, error) {
+				return m.acquire(ctx, pool, value)
+			})
+		}()
 		if n == 0 && err != nil {
 			return err
 		}
 
 		now := time.Now()
-		until := now.Add(m.expiry - now.Sub(start) - time.Duration(int64(float64(m.expiry)*m.factor)))
+		until := now.Add(m.expiry - now.Sub(start) - time.Duration(int64(float64(m.expiry)*m.driftFactor)))
 		if n >= m.quorum && now.Before(until) {
 			m.value = value
 			m.until = until
 			return nil
 		}
-		_, _ = m.actOnPoolsAsync(func(pool redis.Pool) (bool, error) {
-			return m.release(ctx, pool, value)
-		})
+		_, err = func() (int, error) {
+			ctx, cancel := context.WithTimeout(ctx, time.Duration(int64(float64(m.expiry)*m.timeoutFactor)))
+			defer cancel()
+			return m.actOnPoolsAsync(func(pool redis.Pool) (bool, error) {
+				return m.release(ctx, pool, value)
+			})
+		}()
+		if i == m.tries-1 && err != nil {
+			return err
+		}
 	}
 
 	return ErrFailed
@@ -119,7 +141,7 @@ func (m *Mutex) ExtendContext(ctx context.Context) (bool, error) {
 		return false, err
 	}
 	now := time.Now()
-	until := now.Add(m.expiry - now.Sub(start) - time.Duration(int64(float64(m.expiry)*m.factor)))
+	until := now.Add(m.expiry - now.Sub(start) - time.Duration(int64(float64(m.expiry)*m.driftFactor)))
 	if now.Before(until) {
 		m.until = until
 		return true, nil
@@ -128,7 +150,7 @@ func (m *Mutex) ExtendContext(ctx context.Context) (bool, error) {
 }
 
 // Valid returns true if the lock acquired through m is still valid. It may
-// also return true erroneously if qourum is achieved during the call and at
+// also return true erroneously if quorum is achieved during the call and at
 // least one node then takes long enough to respond for the lock to expire.
 //
 // Deprecated: Use Until instead. See https://github.com/go-redsync/redsync/issues/72.
@@ -137,7 +159,7 @@ func (m *Mutex) Valid() (bool, error) {
 }
 
 // ValidContext returns true if the lock acquired through m is still valid. It may
-// also return true erroneously if qourum is achieved during the call and at
+// also return true erroneously if quorum is achieved during the call and at
 // least one node then takes long enough to respond for the lock to expire.
 //
 // Deprecated: Use Until instead. See https://github.com/go-redsync/redsync/issues/72.
