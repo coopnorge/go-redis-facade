@@ -27,7 +27,7 @@ github.com/go-redis/redis/v8/internal/pool
 github.com/go-redis/redis/v8/internal/proto
 github.com/go-redis/redis/v8/internal/rand
 github.com/go-redis/redis/v8/internal/util
-# github.com/go-redsync/redsync/v4 v4.5.0
+# github.com/go-redsync/redsync/v4 v4.5.1
 ## explicit; go 1.14
 github.com/go-redsync/redsync/v4
 github.com/go-redsync/redsync/v4/redis
