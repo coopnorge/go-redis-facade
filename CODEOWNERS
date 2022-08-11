@@ -1,4 +1,4 @@
-
+* @coopnorge/store-experience
 /CODEOWNERS @coopnorge/security-guild
 
 .github/workflows/security-* @coopnorge/security-guild
