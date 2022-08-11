@@ -22,7 +22,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 	"github.com/google/tink/go/core/registry"
 	"github.com/google/tink/go/tink"
 	tinkpb "github.com/google/tink/go/proto/tink_go_proto"
@@ -39,7 +39,8 @@ type KMSEnvelopeAEAD struct {
 }
 
 // NewKMSEnvelopeAEAD creates an new instance of KMSEnvelopeAEAD.
-// Deprecated: use NewKMSEnvelopeAEAD2 which takes a pointer to a KeyTemplate proto rather than a value.
+//
+// Deprecated: Use [NewKMSEnvelopeAEAD2] which takes a pointer to a KeyTemplate proto rather than a value.
 func NewKMSEnvelopeAEAD(kt tinkpb.KeyTemplate, remote tink.AEAD) *KMSEnvelopeAEAD {
 	return &KMSEnvelopeAEAD{
 		remote:      remote,
