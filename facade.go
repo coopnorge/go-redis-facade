@@ -63,7 +63,8 @@ type KeyValueStorage interface {
 
 // RedisFacade storage
 type RedisFacade struct {
-	c redis.Client
+	c   redis.Client
+	cfg Config
 
 	rSync *redsync.Redsync
 
@@ -71,7 +72,7 @@ type RedisFacade struct {
 	redMutexKey string
 	redMutex    *redsync.Mutex
 
-	encryption Encryption
+	encryption        Encryption
 	encryptionEnabled bool
 }
 
@@ -104,9 +105,10 @@ func NewRedisFacade(config Config, encryption Encryption) (*RedisFacade, error) 
 	})
 
 	rf := &RedisFacade{
-		c: *rCli,
-		rSync: redsync.New(goredis.NewPool(rCli)),
-		encryption: encryption,
+		c:                 *rCli,
+		cfg:               config,
+		rSync:             redsync.New(goredis.NewPool(rCli)),
+		encryption:        encryption,
 		encryptionEnabled: config.EncryptionEnabled,
 	}
 	if err := rf.IsAvailable(context.Background()); err != nil {
@@ -128,7 +130,10 @@ func (rf *RedisFacade) IsAvailable(ctx context.Context) error {
 }
 
 // Save value in storage by key with expiration
-func (rf *RedisFacade) Save(ctx context.Context, key string, value string, expiration time.Duration) (err error) {
+func (rf *RedisFacade) Save(baseCtx context.Context, key string, value string, expiration time.Duration) (err error) {
+	ctx, ctxCancel := context.WithTimeout(baseCtx, rf.cfg.DialTimeout)
+	defer ctxCancel()
+
 	valueToStore := []byte(value)
 	if rf.encryptionEnabled {
 		valueToStore, err = rf.encryption.Encrypt([]byte(value))
@@ -156,7 +161,10 @@ func (rf *RedisFacade) Save(ctx context.Context, key string, value string, expir
 }
 
 // Update value in storage by key and update expiration
-func (rf *RedisFacade) Update(ctx context.Context, key string, value string, expiration time.Duration) (err error) {
+func (rf *RedisFacade) Update(baseCtx context.Context, key string, value string, expiration time.Duration) (err error) {
+	ctx, ctxCancel := context.WithTimeout(baseCtx, rf.cfg.DialTimeout)
+	defer ctxCancel()
+
 	valueToStore := []byte(value)
 	if rf.encryptionEnabled {
 		valueToStore, err = rf.encryption.Encrypt([]byte(value))
@@ -174,7 +182,10 @@ func (rf *RedisFacade) Update(ctx context.Context, key string, value string, exp
 }
 
 // Delete value in storage by key
-func (rf *RedisFacade) Delete(ctx context.Context, key string) (count int64, err error) {
+func (rf *RedisFacade) Delete(baseCtx context.Context, key string) (count int64, err error) {
+	ctx, ctxCancel := context.WithTimeout(baseCtx, rf.cfg.DialTimeout)
+	defer ctxCancel()
+
 	if lockErr := rf.lockAcquire(ctx, key); lockErr != nil {
 		return count, lockErr
 	}
@@ -195,7 +206,10 @@ func (rf *RedisFacade) Delete(ctx context.Context, key string) (count int64, err
 }
 
 // Find in storage by key
-func (rf *RedisFacade) Find(ctx context.Context, key string) (v string, err error) {
+func (rf *RedisFacade) Find(baseCtx context.Context, key string) (v string, err error) {
+	ctx, ctxCancel := context.WithTimeout(baseCtx, rf.cfg.DialTimeout)
+	defer ctxCancel()
+
 	if lockErr := rf.lockAcquire(ctx, key); lockErr != nil {
 		return "", lockErr
 	}
@@ -240,7 +254,10 @@ func (rf *RedisFacade) Find(ctx context.Context, key string) (v string, err erro
 }
 
 // FindKeys in storage by given pattern
-func (rf *RedisFacade) FindKeys(ctx context.Context, pattern string) (redisKeysVal []string, err error) {
+func (rf *RedisFacade) FindKeys(baseCtx context.Context, pattern string) (redisKeysVal []string, err error) {
+	ctx, ctxCancel := context.WithTimeout(baseCtx, rf.cfg.DialTimeout)
+	defer ctxCancel()
+
 	result := rf.c.Keys(ctx, pattern)
 	if result == nil {
 		return nil, &StorageFacadeError{

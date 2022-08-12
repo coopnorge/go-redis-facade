@@ -25,6 +25,8 @@ require (
 	github.com/googleapis/gax-go/v2 v2.1.1 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
+	github.com/kr/pretty v0.2.1 // indirect
+	github.com/kr/text v0.2.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/yuin/gopher-lua v0.0.0-20220413183635-c841877397d8 // indirect
 	go.opencensus.io v0.23.0 // indirect

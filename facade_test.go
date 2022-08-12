@@ -53,7 +53,7 @@ func TestRedisFacadeSaveWithLock(t *testing.T) {
 	mockEncryptor1 := getPreparedMocks(t)
 	mockEncryptor2 := getPreparedMocks(t)
 
-	cfg := Config{Address: stubConn.Addr(), EncryptionEnabled: true}
+	cfg := Config{Address: stubConn.Addr(), EncryptionEnabled: true, DialTimeout: time.Minute}
 
 	facadeClient0, facadeClient0Err := NewRedisFacade(cfg, mockEncryptor0)
 	facadeClient1, facadeClient1Err := NewRedisFacade(cfg, mockEncryptor1)
@@ -94,7 +94,7 @@ func TestRedisFacadeSaveWithLockInSameTime(t *testing.T) {
 	mockEncryptor0 := &stubEncryption{}
 	mockEncryptor1 := &stubEncryption{}
 	mockEncryptor2 := &stubEncryption{}
-	cfg := Config{Address: stubConn.Addr(), EncryptionEnabled: true}
+	cfg := Config{Address: stubConn.Addr(), EncryptionEnabled: true, DialTimeout: time.Second}
 
 	validatorClient, validatorClientErr := NewRedisFacade(cfg, mockEncryptor0)
 	writeClient1, writeClient1Err := NewRedisFacade(cfg, mockEncryptor1)
@@ -140,7 +140,7 @@ func isRecordSame(cli *RedisFacade, testStoredKey, expectedRes string, t *testin
 func TestEncryptionDisabled(t *testing.T) {
 	mockEncryptor := getPreparedMocks(t)
 
-	cfg := Config{Address: stubConn.Addr(), EncryptionEnabled: false}
+	cfg := Config{Address: stubConn.Addr(), EncryptionEnabled: false, DialTimeout: time.Minute}
 
 	validatorClient, validatorClientErr := NewRedisFacade(cfg, mockEncryptor)
 	assert.Nil(t, validatorClientErr)
