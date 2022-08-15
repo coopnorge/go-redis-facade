@@ -9,7 +9,6 @@ import (
 	"github.com/go-redis/redis/v8"
 	"github.com/go-redsync/redsync/v4"
 	"github.com/go-redsync/redsync/v4/redis/goredis/v8"
-	"github.com/google/uuid"
 	"github.com/pkg/errors"
 )
 
@@ -202,6 +201,7 @@ func (rf *RedisFacade) Delete(baseCtx context.Context, key string) (count int64,
 	if lockErr := rf.lockRelease(ctx); lockErr != nil {
 		return count, lockErr
 	}
+
 	return redisVal, err
 }
 
@@ -302,24 +302,16 @@ func (rf *RedisFacade) doInSync(
 }
 
 // lockAcquire will lock resource
-func (rf *RedisFacade) lockAcquire(ctx context.Context, prefix string) error {
+func (rf *RedisFacade) lockAcquire(ctx context.Context, uniqueKey string) error {
 	rf.Lock()
 	defer rf.Unlock()
 
-	newUUID, errNewUUID := uuid.NewUUID()
-	if errNewUUID != nil {
-		return &StorageFacadeError{
-			Type:    SyncError,
-			Details: fmt.Sprintf("unable to generate unique lock uuid, err: %v", errNewUUID),
-		}
-	}
-
-	rf.redMutexKey = fmt.Sprintf("%s_", newUUID.String())
-	rf.redMutex = rf.rSync.NewMutex(rf.redMutexKey)
+	rf.redMutexKey = fmt.Sprintf("%s_REDSYNC", uniqueKey)
+	rf.redMutex = rf.rSync.NewMutex(rf.redMutexKey, redsync.WithExpiry(rf.cfg.DialTimeout))
 	if lockErr := rf.redMutex.LockContext(ctx); lockErr != nil {
 		return &StorageFacadeError{
 			Type:    SyncError,
-			Details: fmt.Sprintf("unable to acquire lock for redis resource (key:%s, lock:%s), err: %v", prefix, rf.redMutexKey, lockErr),
+			Details: fmt.Sprintf("unable to acquire lock for redis resource (key:%s, lock:%s), err: %v", uniqueKey, rf.redMutexKey, lockErr),
 		}
 	}
 

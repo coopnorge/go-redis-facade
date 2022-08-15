@@ -77,9 +77,6 @@ github.com/google/tink/go/proto/xchacha20_poly1305_go_proto
 github.com/google/tink/go/subtle
 github.com/google/tink/go/subtle/random
 github.com/google/tink/go/tink
-# github.com/google/uuid v1.3.0
-## explicit
-github.com/google/uuid
 # github.com/googleapis/gax-go/v2 v2.1.1
 ## explicit; go 1.11
 github.com/googleapis/gax-go/v2
