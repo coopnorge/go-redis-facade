@@ -9,7 +9,6 @@ import (
 	"github.com/go-redis/redis/v8"
 	"github.com/go-redsync/redsync/v4"
 	"github.com/go-redsync/redsync/v4/redis/goredis/v8"
-	"github.com/google/uuid"
 	"github.com/pkg/errors"
 )
 
@@ -307,15 +306,7 @@ func (rf *RedisFacade) lockAcquire(ctx context.Context, recordKey string) error 
 	rf.Lock()
 	defer rf.Unlock()
 
-	newUUID, errNewUUID := uuid.NewUUID()
-	if errNewUUID != nil {
-		return &StorageFacadeError{
-			Type:    SyncError,
-			Details: fmt.Sprintf("unable to generate unique lock uuid, err: %v", errNewUUID),
-		}
-	}
-
-	rf.redMutexKey = fmt.Sprintf("%s_", newUUID.String())
+	rf.redMutexKey = fmt.Sprintf("%s_REDSYNC_LOCK", recordKey)
 	rf.redMutex = rf.rSync.NewMutex(rf.redMutexKey, redsync.WithExpiry(rf.cfg.DialTimeout))
 	if lockErr := rf.redMutex.LockContext(ctx); lockErr != nil {
 		return &StorageFacadeError{
