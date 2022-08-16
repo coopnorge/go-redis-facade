@@ -8,6 +8,7 @@ require (
 	github.com/go-redsync/redsync/v4 v4.5.1
 	github.com/golang/mock v1.6.0
 	github.com/google/tink/go v1.7.0
+	github.com/google/uuid v1.3.0
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.8.0
 )
@@ -24,8 +25,6 @@ require (
 	github.com/googleapis/gax-go/v2 v2.1.1 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
-	github.com/kr/pretty v0.2.1 // indirect
-	github.com/kr/text v0.2.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/yuin/gopher-lua v0.0.0-20220413183635-c841877397d8 // indirect
 	go.opencensus.io v0.23.0 // indirect

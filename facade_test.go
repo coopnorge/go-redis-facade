@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -50,65 +49,98 @@ func TestMain(m *testing.M) {
 }
 
 func TestRedisFacadeSaveWithLock(t *testing.T) {
-	redisValueExpiryTime := 30 * time.Second
-	redisCfg := Config{Address: stubConn.Addr(), EncryptionEnabled: true, DialTimeout: 2 * time.Minute}
+	mockEncryptor0 := getPreparedMocks(t)
+	mockEncryptor1 := getPreparedMocks(t)
+	mockEncryptor2 := getPreparedMocks(t)
 
-	mockBaseEncryption := getPreparedMocks(t)
-	facadeBaseClient, facadeBaseClientErr := NewRedisFacade(redisCfg, mockBaseEncryption)
-	if facadeBaseClientErr != nil {
+	cfg := Config{Address: stubConn.Addr(), EncryptionEnabled: true}
+
+	facadeClient0, facadeClient0Err := NewRedisFacade(cfg, mockEncryptor0)
+	facadeClient1, facadeClient1Err := NewRedisFacade(cfg, mockEncryptor1)
+	facadeClient2, facadeClient2Err := NewRedisFacade(cfg, mockEncryptor2)
+	if facadeClient0Err != nil || facadeClient1Err != nil || facadeClient2Err != nil {
 		t.Fatal("unable to create one of redis facades")
 	}
 
 	// Act
 	const testStoredKey = "race-update"
-	const maxRedisInst = 2
+	const expectedStoredValue = "the-one-bar"
 
 	// Create testStoredKey
-	mockBaseEncryption.EXPECT().Encrypt([]byte("bar")).Return([]byte("encrypted-bar"), nil)
-	assert.Nil(t, facadeBaseClient.Save(context.Background(), testStoredKey, "bar", redisValueExpiryTime))
+	mockEncryptor0.EXPECT().Encrypt([]byte("bar")).Return([]byte("encrypted-bar"), nil)
+	assert.Nil(t, facadeClient0.Save(context.Background(), testStoredKey, "bar", time.Minute))
 	time.Sleep(time.Millisecond)
 
-	var wg sync.WaitGroup
-	for i := 1; i <= maxRedisInst; i++ {
-		wg.Add(1)
-		go func(i int, t *testing.T) {
-			time.Sleep(time.Duration(i) * time.Millisecond)
+	// Try update testStoredKey - value
+	go func() {
+		mockEncryptor1.EXPECT().Encrypt([]byte("first-update")).Return([]byte("encrypted-first-update"), nil)
+		assert.Nil(t, facadeClient1.Update(context.Background(), testStoredKey, "first-update", time.Minute))
+		time.Sleep(time.Millisecond)
+		mockEncryptor1.EXPECT().Encrypt([]byte(expectedStoredValue)).Return([]byte("encrypted-the-one-bar"), nil)
+		assert.Nil(t, facadeClient1.Update(context.Background(), testStoredKey, expectedStoredValue, time.Minute))
+	}()
+	go func() {
+		mockEncryptor2.EXPECT().Encrypt([]byte("second-update")).Return([]byte("encrypted-second-update"), nil)
+		assert.Nil(t, facadeClient2.Update(context.Background(), testStoredKey, "second-update", time.Minute))
+	}()
 
-			defer func() {
-				wg.Done()
-			}()
+	time.Sleep(time.Millisecond * 500)
 
-			mockEncryptor := getPreparedMocks(t)
-			facadeClient, facadeClientErr := NewRedisFacade(redisCfg, mockEncryptor)
-			if facadeClientErr != nil {
-				t.Errorf("unable to create one of redis facades")
-				return
-			}
+	mockEncryptor0.EXPECT().Decrypt([]byte("encrypted-the-one-bar")).Return([]byte(expectedStoredValue), nil)
+	assert.True(t, isRecordSame(facadeClient0, testStoredKey, expectedStoredValue, t), "expected to be found vale")
+}
 
-			updateVal := fmt.Sprintf("update-%d", i)
-			encryptUpdateVal := fmt.Sprintf("encrypt-update-%d", i)
-			mockEncryptor.EXPECT().Encrypt([]byte(updateVal)).Return([]byte(encryptUpdateVal), nil)
-			assert.Nil(t, facadeClient.Update(context.Background(), testStoredKey, updateVal, redisValueExpiryTime))
-		}(i, t)
+func TestRedisFacadeSaveWithLockInSameTime(t *testing.T) {
+	mockEncryptor0 := &stubEncryption{}
+	mockEncryptor1 := &stubEncryption{}
+	mockEncryptor2 := &stubEncryption{}
+	cfg := Config{Address: stubConn.Addr(), EncryptionEnabled: true}
+
+	validatorClient, validatorClientErr := NewRedisFacade(cfg, mockEncryptor0)
+	writeClient1, writeClient1Err := NewRedisFacade(cfg, mockEncryptor1)
+	writeClient2, writeClient2Err := NewRedisFacade(cfg, mockEncryptor2)
+	if validatorClientErr != nil || writeClient1Err != nil || writeClient2Err != nil {
+		t.Fatal("unable to create one of redis facades")
 	}
 
-	wg.Wait()
+	// Act
+	const testStoredKey = "race-write"
 
-	mockBaseEncryption.EXPECT().Decrypt([]byte(fmt.Sprintf("encrypt-update-%d", maxRedisInst))).Return([]byte(fmt.Sprintf("update-%d", maxRedisInst)), nil)
-	assert.True(t, isRecordSame(facadeBaseClient, testStoredKey, fmt.Sprintf("update-%d", maxRedisInst), t), "expected to be found vale")
+	// Create testStoredKey
+	assert.Nil(t, validatorClient.Save(context.Background(), testStoredKey, "init", time.Minute))
+	assert.True(t, isRecordSame(validatorClient, testStoredKey, "init", t), "unexpected stored value")
+
+	// Try update testStoredKey - value
+	go func() {
+		assert.Nil(t, writeClient1.Update(context.Background(), testStoredKey, "first-update", time.Minute))
+		assert.True(t, isRecordSame(validatorClient, testStoredKey, "first-update", t), "unexpected stored value")
+	}()
+	go func() {
+		assert.True(
+			t,
+			isRecordSame(writeClient2, testStoredKey, "init", t) || isRecordSame(writeClient2, testStoredKey, "first-update", t),
+			"unexpected stored value",
+		)
+		assert.Nil(t, validatorClient.Update(context.Background(), testStoredKey, "second-update", time.Minute))
+	}()
+
+	time.Sleep(time.Second)
+	assert.True(t, isRecordSame(validatorClient, testStoredKey, "second-update", t), "unexpected stored value")
 }
 
 func isRecordSame(cli *RedisFacade, testStoredKey, expectedRes string, t *testing.T) bool {
 	res, resErr := cli.Find(context.Background(), testStoredKey)
 	assert.Nil(t, resErr)
 
-	return assert.Equal(t, expectedRes, res)
+	t.Log(fmt.Sprintf("Validating stored value in redis by key (%s) => Expected: %s - Stored: %s", testStoredKey, expectedRes, string(res)))
+
+	return expectedRes == string(res)
 }
 
 func TestEncryptionDisabled(t *testing.T) {
 	mockEncryptor := getPreparedMocks(t)
 
-	cfg := Config{Address: stubConn.Addr(), EncryptionEnabled: false, DialTimeout: 2 * time.Minute}
+	cfg := Config{Address: stubConn.Addr(), EncryptionEnabled: false}
 
 	validatorClient, validatorClientErr := NewRedisFacade(cfg, mockEncryptor)
 	assert.Nil(t, validatorClientErr)

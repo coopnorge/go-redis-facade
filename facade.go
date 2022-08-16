@@ -9,6 +9,7 @@ import (
 	"github.com/go-redis/redis/v8"
 	"github.com/go-redsync/redsync/v4"
 	"github.com/go-redsync/redsync/v4/redis/goredis/v8"
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 )
 
@@ -62,8 +63,7 @@ type KeyValueStorage interface {
 
 // RedisFacade storage
 type RedisFacade struct {
-	c   redis.Client
-	cfg Config
+	c redis.Client
 
 	rSync *redsync.Redsync
 
@@ -71,7 +71,7 @@ type RedisFacade struct {
 	redMutexKey string
 	redMutex    *redsync.Mutex
 
-	encryption        Encryption
+	encryption Encryption
 	encryptionEnabled bool
 }
 
@@ -104,10 +104,9 @@ func NewRedisFacade(config Config, encryption Encryption) (*RedisFacade, error) 
 	})
 
 	rf := &RedisFacade{
-		c:                 *rCli,
-		cfg:               config,
-		rSync:             redsync.New(goredis.NewPool(rCli)),
-		encryption:        encryption,
+		c: *rCli,
+		rSync: redsync.New(goredis.NewPool(rCli)),
+		encryption: encryption,
 		encryptionEnabled: config.EncryptionEnabled,
 	}
 	if err := rf.IsAvailable(context.Background()); err != nil {
@@ -129,10 +128,7 @@ func (rf *RedisFacade) IsAvailable(ctx context.Context) error {
 }
 
 // Save value in storage by key with expiration
-func (rf *RedisFacade) Save(baseCtx context.Context, key string, value string, expiration time.Duration) (err error) {
-	ctx, ctxCancel := context.WithTimeout(baseCtx, rf.cfg.DialTimeout)
-	defer ctxCancel()
-
+func (rf *RedisFacade) Save(ctx context.Context, key string, value string, expiration time.Duration) (err error) {
 	valueToStore := []byte(value)
 	if rf.encryptionEnabled {
 		valueToStore, err = rf.encryption.Encrypt([]byte(value))
@@ -160,10 +156,7 @@ func (rf *RedisFacade) Save(baseCtx context.Context, key string, value string, e
 }
 
 // Update value in storage by key and update expiration
-func (rf *RedisFacade) Update(baseCtx context.Context, key string, value string, expiration time.Duration) (err error) {
-	ctx, ctxCancel := context.WithTimeout(baseCtx, rf.cfg.DialTimeout)
-	defer ctxCancel()
-
+func (rf *RedisFacade) Update(ctx context.Context, key string, value string, expiration time.Duration) (err error) {
 	valueToStore := []byte(value)
 	if rf.encryptionEnabled {
 		valueToStore, err = rf.encryption.Encrypt([]byte(value))
@@ -181,10 +174,7 @@ func (rf *RedisFacade) Update(baseCtx context.Context, key string, value string,
 }
 
 // Delete value in storage by key
-func (rf *RedisFacade) Delete(baseCtx context.Context, key string) (count int64, err error) {
-	ctx, ctxCancel := context.WithTimeout(baseCtx, rf.cfg.DialTimeout)
-	defer ctxCancel()
-
+func (rf *RedisFacade) Delete(ctx context.Context, key string) (count int64, err error) {
 	if lockErr := rf.lockAcquire(ctx, key); lockErr != nil {
 		return count, lockErr
 	}
@@ -201,15 +191,11 @@ func (rf *RedisFacade) Delete(baseCtx context.Context, key string) (count int64,
 	if lockErr := rf.lockRelease(ctx); lockErr != nil {
 		return count, lockErr
 	}
-
 	return redisVal, err
 }
 
 // Find in storage by key
-func (rf *RedisFacade) Find(baseCtx context.Context, key string) (v string, err error) {
-	ctx, ctxCancel := context.WithTimeout(baseCtx, rf.cfg.DialTimeout)
-	defer ctxCancel()
-
+func (rf *RedisFacade) Find(ctx context.Context, key string) (v string, err error) {
 	if lockErr := rf.lockAcquire(ctx, key); lockErr != nil {
 		return "", lockErr
 	}
@@ -254,10 +240,7 @@ func (rf *RedisFacade) Find(baseCtx context.Context, key string) (v string, err 
 }
 
 // FindKeys in storage by given pattern
-func (rf *RedisFacade) FindKeys(baseCtx context.Context, pattern string) (redisKeysVal []string, err error) {
-	ctx, ctxCancel := context.WithTimeout(baseCtx, rf.cfg.DialTimeout)
-	defer ctxCancel()
-
+func (rf *RedisFacade) FindKeys(ctx context.Context, pattern string) (redisKeysVal []string, err error) {
 	result := rf.c.Keys(ctx, pattern)
 	if result == nil {
 		return nil, &StorageFacadeError{
@@ -302,16 +285,24 @@ func (rf *RedisFacade) doInSync(
 }
 
 // lockAcquire will lock resource
-func (rf *RedisFacade) lockAcquire(ctx context.Context, recordKey string) error {
+func (rf *RedisFacade) lockAcquire(ctx context.Context, prefix string) error {
 	rf.Lock()
 	defer rf.Unlock()
 
-	rf.redMutexKey = fmt.Sprintf("%s_REDSYNC_LOCK", recordKey)
-	rf.redMutex = rf.rSync.NewMutex(rf.redMutexKey, redsync.WithExpiry(rf.cfg.DialTimeout))
+	newUUID, errNewUUID := uuid.NewUUID()
+	if errNewUUID != nil {
+		return &StorageFacadeError{
+			Type:    SyncError,
+			Details: fmt.Sprintf("unable to generate unique lock uuid, err: %v", errNewUUID),
+		}
+	}
+
+	rf.redMutexKey = fmt.Sprintf("%s_", newUUID.String())
+	rf.redMutex = rf.rSync.NewMutex(rf.redMutexKey)
 	if lockErr := rf.redMutex.LockContext(ctx); lockErr != nil {
 		return &StorageFacadeError{
 			Type:    SyncError,
-			Details: fmt.Sprintf("unable to acquire lock for redis resource (key:%s, lock:%s), err: %v", recordKey, rf.redMutexKey, lockErr),
+			Details: fmt.Sprintf("unable to acquire lock for redis resource (key:%s, lock:%s), err: %v", prefix, rf.redMutexKey, lockErr),
 		}
 	}
 
