@@ -1,0 +1,13 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: scan-and-pay-redis-facade
+  description: Facade to simplify Redis operations with client synchronization
+  tags:
+    - "go"
+  annotations:
+    github.com/project-slug: coopnorge/scan-and-pay-redis-facade
+spec:
+  type: library
+  lifecycle: deprecated
+  owner: store-experience
