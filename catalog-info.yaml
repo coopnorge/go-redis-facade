@@ -9,5 +9,5 @@ metadata:
     github.com/project-slug: coopnorge/scan-and-pay-redis-facade
 spec:
   type: library
-  lifecycle: deprecated
+  lifecycle: experimental
   owner: store-experience
