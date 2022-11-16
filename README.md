@@ -1,4 +1,4 @@
-# SnP Redis Facade
+# Go Redis Facade
 
 ```text
 Simple facade to operate Redis with safe locking algorithm (RedSync) 

@@ -1,13 +1,13 @@
 apiVersion: backstage.io/v1alpha1
 kind: Component
 metadata:
-  name: scan-and-pay-redis-facade
-  description: Facade to simplify Redis operations with client synchronization
+  name: go-redis-facade
+  description: Go Redis Facade that supports concurrency-safe connections to 1 Redis instance
   tags:
     - "go"
   annotations:
-    github.com/project-slug: coopnorge/scan-and-pay-redis-facade
+    github.com/project-slug: coopnorge/go-redis-facade
 spec:
   type: library
   lifecycle: experimental
-  owner: store-experience
+  owner: engineering
