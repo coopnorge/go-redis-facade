@@ -1,6 +1,6 @@
 # Go Redis Facade
 
-![Lint](https://github.com/coopnorge/go-redis-facade/actions/workflows/lint.yml/badge.svg)
+[![Lint](https://github.com/coopnorge/go-redis-facade/actions/workflows/lint.yml/badge.svg)](https://github.com/coopnorge/go-redis-facade/actions/workflows/lint.yml)
 ![Build](https://github.com/coopnorge/go-redis-facade/actions/workflows/master-test.yml/badge.svg)
 
 Coop Redis Facade wraps simple interaction with 
