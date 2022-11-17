@@ -1,7 +1,7 @@
 # Go Redis Facade
 
 [![Lint](https://github.com/coopnorge/go-redis-facade/actions/workflows/lint.yml/badge.svg)](https://github.com/coopnorge/go-redis-facade/actions/workflows/lint.yml)
-![Build](https://github.com/coopnorge/go-redis-facade/actions/workflows/master-test.yml/badge.svg)
+[![Build](https://github.com/coopnorge/go-redis-facade/actions/workflows/master-test.yml/badge.svg)](https://github.com/coopnorge/go-redis-facade/actions/workflows/master-test.yml)
 
 Coop Redis Facade wraps simple interaction with 
 Redis clients for CRUD operations by preventing
