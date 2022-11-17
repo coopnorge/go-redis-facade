@@ -2,12 +2,23 @@ apiVersion: backstage.io/v1alpha1
 kind: Component
 metadata:
   name: go-redis-facade
+  title: Golang Redis Facade
   description: Go Redis Facade that supports concurrency-safe connections to 1 Redis instance
   tags:
     - "go"
+    - "pkg"
   annotations:
     github.com/project-slug: coopnorge/go-redis-facade
+  links:
+    - url: https://redis.uptrace.dev/
+      title: Official Golang Redis client documentation
+      icon: web
+    - url: https://redis.io/docs/manual/patterns/distributed-locks/
+      title: Official Redis post about RedSync algorithm
+      icon: web
 spec:
+  profile:
+    displayName: Golang Redis Facade
   type: library
   lifecycle: experimental
   owner: engineering
