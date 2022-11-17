@@ -8,7 +8,7 @@ Redis clients for CRUD operations by preventing
 race conditions between multiple client instances
 against singular instances of Redis.
 
-If you are interested how Sync between clients works,
+If you are interested in how Sync between clients works,
 take a look at
 [this post.](https://redis.io/docs/manual/patterns/distributed-locks/)
 
