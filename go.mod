@@ -1,6 +1,6 @@
 module github.com/coopnorge/scan-and-pay-redis-facade
 
-go 1.17
+go 1.20
 
 require (
 	github.com/alicebob/miniredis v2.5.0+incompatible
