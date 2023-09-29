@@ -1,4 +1,4 @@
-module github.com/coopnorge/scan-and-pay-redis-facade
+module github.com/coopnorge/go-redis-facade
 
 go 1.20
 

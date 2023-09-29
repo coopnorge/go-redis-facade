@@ -1,6 +1,8 @@
 package database
 
 import (
+	"context"
+
 	"github.com/google/tink/go/aead"
 	"github.com/google/tink/go/core/registry"
 	"github.com/google/tink/go/integration/gcpkms"
@@ -22,13 +24,13 @@ type EncryptionClient struct {
 
 // EncryptionConfig is configuration needed to set up the encryption client
 type EncryptionConfig struct {
-	RedisKeyURI    string
-	Aad            []byte
+	RedisKeyURI string
+	Aad         []byte
 }
 
 // NewEncryptionClient creates a new client for encrypting and decrypting data
 func NewEncryptionClient(c EncryptionConfig) (*EncryptionClient, error) {
-	kmsClient, err := gcpkms.NewClient(c.RedisKeyURI)
+	kmsClient, err := gcpkms.NewClientWithOptions(context.Background(), c.RedisKeyURI)
 	if err != nil {
 		return nil, err
 	}
