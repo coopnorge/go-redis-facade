@@ -16,7 +16,7 @@ take a look at
 ## Installation
 
 ```bash
-$ go get -u github.com/coopnorge/go-datadog-lib
+$ go get -u github.com/coopnorge/go-redis-facade
 ```
 
 ## Quick Start
@@ -24,7 +24,7 @@ $ go get -u github.com/coopnorge/go-datadog-lib
 Add this import line to the file you're working in:
 
 ```Go
-import "github.com/coopnorge/go-datadog-lib"
+import "github.com/coopnorge/go-redis-facade"
 ```
 
 We recommend create custom constructor.
