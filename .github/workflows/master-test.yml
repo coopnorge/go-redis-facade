@@ -16,7 +16,7 @@ jobs:
         with:
           go-version: ${{ matrix.go }}
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Fetch all tags
         run: git fetch --depth=1 origin +refs/tags/*:refs/tags/*
       - name: Last tag
