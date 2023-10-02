@@ -71,7 +71,7 @@ type RedisFacade struct {
 	redMutexKey string
 	redMutex    *redsync.Mutex
 
-	encryption Encryption
+	encryption        Encryption
 	encryptionEnabled bool
 }
 
@@ -104,9 +104,9 @@ func NewRedisFacade(config Config, encryption Encryption) (*RedisFacade, error) 
 	})
 
 	rf := &RedisFacade{
-		c: *rCli,
-		rSync: redsync.New(goredis.NewPool(rCli)),
-		encryption: encryption,
+		c:                 *rCli,
+		rSync:             redsync.New(goredis.NewPool(rCli)),
+		encryption:        encryption,
 		encryptionEnabled: config.EncryptionEnabled,
 	}
 	if err := rf.IsAvailable(context.Background()); err != nil {
@@ -120,11 +120,8 @@ func NewRedisFacade(config Config, encryption Encryption) (*RedisFacade, error) 
 func (rf *RedisFacade) IsAvailable(ctx context.Context) error {
 	res := rf.c.Ping(ctx)
 
-	if err := handleCommandError("Ping", res); err != nil {
-		return err
-	}
-
-	return nil
+	err := handleCommandError("Ping", res)
+	return err
 }
 
 // Save value in storage by key with expiration

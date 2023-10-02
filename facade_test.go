@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis"
-	"github.com/coopnorge/scan-and-pay-redis-facade/internal/generated/mocks"
+	mock_database "github.com/coopnorge/go-redis-facade/internal/generated/mocks"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 )
@@ -132,7 +132,7 @@ func isRecordSame(cli *RedisFacade, testStoredKey, expectedRes string, t *testin
 	res, resErr := cli.Find(context.Background(), testStoredKey)
 	assert.Nil(t, resErr)
 
-	t.Log(fmt.Sprintf("Validating stored value in redis by key (%s) => Expected: %s - Stored: %s", testStoredKey, expectedRes, string(res)))
+	t.Logf("Validating stored value in redis by key (%s) => Expected: %s - Stored: %s", testStoredKey, expectedRes, string(res))
 
 	return expectedRes == string(res)
 }

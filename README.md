@@ -1,21 +1,18 @@
 # Go Redis Facade
 
-[![Lint](https://github.com/coopnorge/go-redis-facade/actions/workflows/lint.yml/badge.svg)](https://github.com/coopnorge/go-redis-facade/actions/workflows/lint.yml)
-[![Build](https://github.com/coopnorge/go-redis-facade/actions/workflows/master-test.yml/badge.svg)](https://github.com/coopnorge/go-redis-facade/actions/workflows/master-test.yml)
+[![Validate](https://github.com/coopnorge/go-redis-facade/actions/workflows/cicd.yaml/badge.svg)](https://github.com/coopnorge/go-redis-facade/actions/workflows/cicd.yaml)
 
-Coop Redis Facade wraps simple interaction with 
-Redis clients for CRUD operations by preventing
-race conditions between multiple client instances
+Coop Redis Facade wraps simple interaction with Redis clients for CRUD
+operations by preventing race conditions between multiple client instances
 against singular instances of Redis.
 
-If you are interested in how Sync between clients works,
-take a look at
-[this post.](https://redis.io/docs/manual/patterns/distributed-locks/)
+If you are interested in how Sync between clients works, take a look at [this
+post.](https://redis.io/docs/manual/patterns/distributed-locks/)
 
 
 ## Installation
 
-```bash
+```console
 $ go get -u github.com/coopnorge/go-redis-facade
 ```
 
@@ -23,7 +20,7 @@ $ go get -u github.com/coopnorge/go-redis-facade
 
 Add this import line to the file you're working in:
 
-```Go
+```go
 import "github.com/coopnorge/go-redis-facade"
 ```
 
@@ -83,12 +80,12 @@ func NewUserRepository(s database.KeyValueStorage) *UserRepository {
 func (r *UserRepository) Create(ctx context.Context, u model.User) error {
 	u.ID = uuid.NewUUID()
     u.CreatedAt = time.Now()
-    
+
     j, jErr := json.Marshal(cart)
     if jErr != nil {
         return jErr
     }
-    
+
     return r.db.Save(ctx, u.ID, string(j), expirationTime)
 }
 ```
@@ -96,6 +93,5 @@ func (r *UserRepository) Create(ctx context.Context, u model.User) error {
 ## Mocks
 
 To generate or update mocks use tools
-[Eitri](https://github.com/Clink-n-Clank/Eitri)
-or use directly
-[Mockhandler](github.com/sanposhiho/gomockhandle)
+[Eitri](https://github.com/Clink-n-Clank/Eitri) or use directly
+[Mockhandler](https://github.com/sanposhiho/gomockhandler)
