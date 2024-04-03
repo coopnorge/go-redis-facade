@@ -42,32 +42,13 @@ jobs:
       - name: Validate
         run: docker compose run --rm ${{ env.docker-compose-service }} validate VERBOSE=all
 
-  validate-old-go:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        go: [ '1.20', '1.21' ]
-    name: Go ${{ matrix.go }} - validate
-    steps:
-      - uses: actions/checkout@v4
-      - name: Setup go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ matrix.go }}
-      - name: Install toolchain
-        run: make toolchain
-      - name: Validate
-        run: make validate
-
   build:
     needs:
       - golang-ci
-      - validate-old-go
     if: always()
     runs-on: ubuntu-latest
     steps:
       - run: exit 1
         name: "Catch errors"
         if: |
-          needs.golang-ci.result == 'failure' ||
-          needs.validate-old-go.result == 'failure'
+          needs.golang-ci.result == 'failure'
