@@ -1,6 +1,6 @@
 module github.com/coopnorge/go-redis-facade
 
-go 1.21
+go 1.22
 
 require (
 	github.com/alicebob/miniredis v2.5.0+incompatible
