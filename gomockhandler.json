@@ -1,8 +1,8 @@
 {
 	"mocks": {
 		"Encryption": {
-			"checksum": "Yv0RMmsx0aN940uMvO1+Gw==",
-			"source_checksum": "BGbbqu//igYEDYvGQsDP7w==",
+			"checksum": "czjkwRzKPGLfsXqaktsoQg==",
+			"source_checksum": "w3hKiaQg1Wo0lKLbz2aTgw==",
 			"mode": "SOURCE_MODE",
 			"source_mode_runner": {
 				"source": "encryption.go",

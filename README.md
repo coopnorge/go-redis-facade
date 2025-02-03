@@ -15,6 +15,18 @@ post.](https://redis.io/docs/manual/patterns/distributed-locks/)
 
 ## Mocks
 
-To generate or update mocks use tools
-[Eitri](https://github.com/Clink-n-Clank/Eitri) or use directly
-[Mockhandler](https://github.com/sanposhiho/gomockhandler)
+To generate or update mocks use
+[`gomockhandler`](github.com/sanposhiho/gomockhandler). `gomockhandler` is
+provided by `golang-devtools`.
+
+### Check mocks
+
+```bash
+docker compose run --rm golang-devtools gomockhandler -config ./gomockhandler.json check
+```
+
+### Generate / Update mocks
+
+```bash
+docker compose run --rm golang-devtools gomockhandler -config ./gomockhandler.json mockgen
+```

@@ -10,8 +10,8 @@ import (
 
 	"github.com/alicebob/miniredis"
 	mock_database "github.com/coopnorge/go-redis-facade/internal/generated/mocks"
-	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
 )
 
 var stubConn *miniredis.Miniredis
