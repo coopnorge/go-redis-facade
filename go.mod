@@ -1,6 +1,7 @@
 module github.com/coopnorge/go-redis-facade
 
 go 1.22
+toolchain go1.23.7
 
 require (
 	github.com/alicebob/miniredis v2.5.0+incompatible
@@ -30,11 +31,11 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/yuin/gopher-lua v0.0.0-20220413183635-c841877397d8 // indirect
 	go.opencensus.io v0.24.0 // indirect
-	golang.org/x/crypto v0.31.0 // indirect
-	golang.org/x/net v0.33.0 // indirect
+	golang.org/x/crypto v0.35.0 // indirect
+	golang.org/x/net v0.36.0 // indirect
 	golang.org/x/oauth2 v0.7.0 // indirect
-	golang.org/x/sys v0.28.0 // indirect
-	golang.org/x/text v0.21.0 // indirect
+	golang.org/x/sys v0.30.0 // indirect
+	golang.org/x/text v0.22.0 // indirect
 	google.golang.org/api v0.114.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/genproto v0.0.0-20230410155749-daa745c078e1 // indirect
