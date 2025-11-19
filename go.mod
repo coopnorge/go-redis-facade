@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	github.com/alicebob/miniredis v2.5.0+incompatible
-	github.com/coopnorge/mage v0.14.2
+	github.com/coopnorge/mage v0.14.4
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/go-redsync/redsync/v4 v4.14.0
 	github.com/google/tink/go v1.7.0
